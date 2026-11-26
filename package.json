@@ -1,0 +1,30 @@
+{
+  "name": "tacl",
+  "version": "0.1.0",
+  "description": "Interactive TUI for managing Headscale ACLs with Device > Profile > User precedence",
+  "type": "module",
+  "bin": {
+    "tacl": "./src/index.tsx"
+  },
+  "scripts": {
+    "start": "bun run src/index.tsx",
+    "demo": "bun run src/index.tsx --demo",
+    "build": "bun run scripts/build.ts all",
+    "build:linux": "bun run scripts/build.ts linux",
+    "build:windows": "bun run scripts/build.ts windows",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opentui/core": "latest",
+    "@opentui/react": "latest",
+    "jsonc-parser": "^3.3.1",
+    "react": "^19.2.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.2.0",
+    "typescript": "^5.8.0"
+  }
+}
