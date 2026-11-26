@@ -1,4 +1,4 @@
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import YAML from "yaml";
 import {
   createEmptyState,
@@ -39,6 +39,7 @@ export interface NativeDetectionResult {
   configPath: string;
   policyMode: HeadscalePolicyMode;
   aclPath?: string;
+  policyPathConfigured: boolean;
   taclStatePath: string;
   message: string;
 }
@@ -61,6 +62,7 @@ export interface ContainerDirInspection {
   configPath: string;
   aclPath?: string;
   policyMode: HeadscalePolicyMode;
+  policyPathConfigured: boolean;
   taclStatePath: string;
   containerRuntime: "docker" | "podman";
   containerName?: string;
@@ -79,6 +81,21 @@ export function serverToTarget(server: ServerConfig): SshTarget {
   };
 }
 
+export function parseRemoteIdentityOutput(stdout: string): {
+  tailscaleIp?: string;
+  remoteHostname?: string;
+} {
+  const lines = stdout.split("\n");
+  const getVal = (p: string) => {
+    const raw = lines.find((l) => l.startsWith(p))?.slice(p.length).trim();
+    return raw || undefined;
+  };
+  return {
+    tailscaleIp: getVal("TS_IP="),
+    remoteHostname: getVal("HOST="),
+  };
+}
+
 /**
  * Detects the remote SSH server's Tailscale IPv4 and hostname so tacl can
  * reliably identify and protect the SSH management link even when SSH connects
@@ -94,19 +111,17 @@ export async function detectRemoteTailscaleIdentity(
     "echo HOST=$HOST",
   ].join("; ");
   const res = await execOnTarget(target, cmd, { timeoutMs: 5000 });
-  const lines = res.stdout.split("\n");
-  const getVal = (p: string) =>
-    lines.find((l) => l.startsWith(p))?.slice(p.length).trim() || undefined;
-  return {
-    tailscaleIp: getVal("TS_IP"),
-    remoteHostname: getVal("HOST"),
-  };
+  return parseRemoteIdentityOutput(res.stdout);
 }
 
-function parsePolicyFromHeadscaleYaml(
+export function parsePolicyFromHeadscaleYaml(
   yamlRaw: string,
   baseDir: string
-): { policyMode: HeadscalePolicyMode; aclPath?: string } {
+): {
+  policyMode: HeadscalePolicyMode;
+  aclPath?: string;
+  policyPathConfigured: boolean;
+} {
   try {
     const parsed = YAML.parse(yamlRaw) as {
       policy?: { mode?: string; path?: string };
@@ -114,20 +129,96 @@ function parsePolicyFromHeadscaleYaml(
     } | null;
 
     if (parsed?.policy?.mode === "database") {
-      return { policyMode: "database" };
+      return { policyMode: "database", policyPathConfigured: true };
     }
-    const rawPath = parsed?.policy?.path || parsed?.acl_policy_path;
+    const rawPath = (parsed?.policy?.path || parsed?.acl_policy_path || "").trim();
     if (rawPath) {
-      // If container uses /etc/headscale/acl.hujson while host mount is baseDir, keep rawPath for native
       return {
         policyMode: "file",
         aclPath: rawPath.startsWith("/") ? rawPath : join(baseDir, rawPath),
+        policyPathConfigured: true,
       };
     }
   } catch {
     // Fallback
   }
-  return { policyMode: "file", aclPath: join(baseDir, "acl.hujson") };
+  return {
+    policyMode: "file",
+    aclPath: join(baseDir, "acl.hujson"),
+    policyPathConfigured: false,
+  };
+}
+
+/**
+ * Updates `policy.path` (or legacy `acl_policy_path`) in Headscale's config.yaml
+ * while preserving all existing comments and formatting.
+ */
+export function patchHeadscalePolicyPathInYaml(
+  yamlRaw: string,
+  aclPath: string
+): { updated: string; changed: boolean } {
+  const quotedPath = JSON.stringify(aclPath);
+  const lines = yamlRaw.split("\n");
+
+  // 1. Look for a top-level `policy:` block
+  const policyIdx = lines.findIndex((line) => /^policy\s*:\s*(#.*)?$/.test(line));
+  if (policyIdx !== -1) {
+    let blockEnd = lines.length;
+    for (let i = policyIdx + 1; i < lines.length; i++) {
+      const l = lines[i]!;
+      if (l.trim() === "" || /^\s*#/.test(l)) continue;
+      if (!/^\s+/.test(l)) {
+        blockEnd = i;
+        break;
+      }
+    }
+
+    let modeIdx = -1;
+    let indent = "  ";
+    for (let i = policyIdx + 1; i < blockEnd; i++) {
+      const l = lines[i]!;
+      const modeMatch = /^(\s+)mode\s*:/.exec(l);
+      if (modeMatch) {
+        modeIdx = i;
+        indent = modeMatch[1]!;
+      }
+      const pathMatch = /^(\s+)path\s*:\s*(.*)$/.exec(l);
+      if (pathMatch) {
+        const lineIndent = pathMatch[1]!;
+        const rest = pathMatch[2]!.trim();
+        // Strip inline comment outside quotes
+        const valOnly = rest.replace(/\s+#.*$/, "").trim();
+        const unquoted = valOnly.replace(/^["']|["']$/g, "");
+        if (unquoted === aclPath) {
+          return { updated: yamlRaw, changed: false };
+        }
+        lines[i] = `${lineIndent}path: ${quotedPath}`;
+        return { updated: lines.join("\n"), changed: true };
+      }
+    }
+
+    // No active `path:` key inside `policy:` block -> insert after `mode:` or `policy:`
+    const insertAt = modeIdx !== -1 ? modeIdx + 1 : policyIdx + 1;
+    lines.splice(insertAt, 0, `${indent}path: ${quotedPath}`);
+    return { updated: lines.join("\n"), changed: true };
+  }
+
+  // 2. Legacy top-level `acl_policy_path:` (Headscale <= v0.22)
+  const legacyIdx = lines.findIndex((line) => /^acl_policy_path\s*:/.test(line));
+  if (legacyIdx !== -1) {
+    const rest = lines[legacyIdx]!.replace(/^acl_policy_path\s*:\s*/, "").trim();
+    const valOnly = rest.replace(/\s+#.*$/, "").trim();
+    const unquoted = valOnly.replace(/^["']|["']$/g, "");
+    if (unquoted === aclPath) {
+      return { updated: yamlRaw, changed: false };
+    }
+    lines[legacyIdx] = `acl_policy_path: ${quotedPath}`;
+    return { updated: lines.join("\n"), changed: true };
+  }
+
+  // 3. No `policy:` block at all -> append one cleanly
+  const suffix = `${yamlRaw.endsWith("\n") ? "" : "\n"}\npolicy:\n  mode: file\n  path: ${quotedPath}\n`;
+  return { updated: yamlRaw + suffix, changed: true };
 }
 
 export function parseNativeProbeOutput(stdout: string): {
@@ -339,6 +430,7 @@ export async function detectNativeHeadscale(
       configPath: parsedProbe.configPath,
       policyMode: "file",
       aclPath: "/etc/headscale/acl.hujson",
+      policyPathConfigured: false,
       taclStatePath: "/etc/headscale/tacl.yaml",
       message:
         "No se encontró el ejecutable 'headscale' en PATH, rutas estándar ni systemd en esta máquina.",
@@ -347,6 +439,7 @@ export async function detectNativeHeadscale(
 
   let policyMode: HeadscalePolicyMode = "file";
   let aclPath: string | undefined = join(dirname(parsedProbe.configPath), "acl.hujson");
+  let policyPathConfigured = false;
   let cfgRead = await readFileOnTarget(
     target,
     parsedProbe.configPath,
@@ -362,6 +455,7 @@ export async function detectNativeHeadscale(
     );
     policyMode = parsed.policyMode;
     aclPath = parsed.aclPath;
+    policyPathConfigured = parsed.policyPathConfigured;
   }
 
   return {
@@ -377,6 +471,7 @@ export async function detectNativeHeadscale(
     configPath: parsedProbe.configPath,
     policyMode,
     aclPath,
+    policyPathConfigured,
     taclStatePath: join(dirname(parsedProbe.configPath), "tacl.yaml"),
     message: `Ejecutable ${parsedProbe.headscaleBin} · Instalador: ${parsedProbe.headscaleInstallerDetail}`,
   };
@@ -530,19 +625,21 @@ export async function inspectContainerDir(
   const getVal = (prefix: string) =>
     lines.find((l) => l.startsWith(prefix))?.slice(prefix.length).trim() ?? "";
 
-  const foundCfg = getVal("CFG");
-  const foundAcl = getVal("ACL");
+  const foundCfg = getVal("CFG=");
+  const foundAcl = getVal("ACL=");
   const configPath = foundCfg || join(dirPath, "config.yaml");
   const cfgDir = dirname(configPath);
 
   let policyMode: HeadscalePolicyMode = "file";
   let aclPath: string | undefined = foundAcl || join(cfgDir, "acl.hujson");
+  let policyPathConfigured = false;
 
   if (foundCfg) {
     const cfgRead = await readFileOnTarget(target, foundCfg, useSudo);
     if (cfgRead.ok) {
       const parsed = parsePolicyFromHeadscaleYaml(cfgRead.content, cfgDir);
       policyMode = parsed.policyMode;
+      policyPathConfigured = parsed.policyPathConfigured;
       // Map container internal path like /etc/headscale/acl.hujson to host cfgDir if not found directly
       if (parsed.aclPath && !foundAcl) {
         const baseName = parsed.aclPath.split("/").pop() || "acl.hujson";
@@ -556,6 +653,7 @@ export async function inspectContainerDir(
     configPath,
     aclPath,
     policyMode,
+    policyPathConfigured,
     taclStatePath: join(cfgDir, "tacl.yaml"),
     containerRuntime: preferredHint?.runtime ?? "docker",
     containerName: preferredHint?.containerName,
@@ -912,7 +1010,97 @@ export async function saveStateLocalAndRemote(
 }
 
 /**
- * Applies a compiled HuJSON policy to Headscale with automatic backup, reload,
+ * Checks whether Headscale's config.yaml currently has `policy.path` configured
+ * when running in file policy mode.
+ */
+export async function checkServerPolicyPathConfigured(
+  server: ServerConfig
+): Promise<boolean> {
+  if (server.policyMode === "database") return true;
+  if (!server.configPath) return true;
+  const target = serverToTarget(server);
+  let cfgRead = await readFileOnTarget(target, server.configPath, server.useSudo);
+  if (!cfgRead.ok && !server.useSudo) {
+    cfgRead = await readFileOnTarget(target, server.configPath, true);
+  }
+  if (!cfgRead.ok) return server.policyPathConfigured ?? true;
+  const parsed = parsePolicyFromHeadscaleYaml(cfgRead.content, dirname(server.configPath));
+  return parsed.policyPathConfigured;
+}
+
+/**
+ * Validates a compiled HuJSON policy against the running Headscale instance using
+ * `headscale policy check -f <tmpFile>` when supported by the installed version.
+ */
+async function validatePolicyWithHeadscale(
+  server: ServerConfig,
+  hujson: string,
+  timestamp: string
+): Promise<{ ok: boolean; error?: string }> {
+  const target = serverToTarget(server);
+  const tmpFile = `/tmp/tacl-check-${timestamp}.hujson`;
+  const writeTmp = await writeFileOnTarget(target, tmpFile, hujson, false);
+  if (!writeTmp.ok) {
+    return { ok: true }; // Best-effort if /tmp isn't writable
+  }
+
+  try {
+    let checkRes;
+    if (server.deployMode === "container") {
+      const runtime = server.containerRuntime ?? "docker";
+      const container = server.containerName || "headscale";
+      const inner = `${runtime} cp ${shellQuote(tmpFile)} ${shellQuote(container)}:/tmp/tacl-check.hujson && ${buildRawHeadscaleCmd(server, "policy check -f /tmp/tacl-check.hujson")}`;
+      checkRes = server.useSudo
+        ? await execSudoOnTarget(target, inner, { timeoutMs: 10_000 })
+        : { ...(await execOnTarget(target, inner, { timeoutMs: 10_000 })), needsSudoPassword: false };
+    } else {
+      checkRes = await runHeadscaleSubcommand(
+        server,
+        `policy check -f ${shellQuote(tmpFile)}`,
+        10_000
+      );
+      if (
+        checkRes.exitCode !== 0 &&
+        !server.useSudo &&
+        isPermissionError(`${checkRes.stderr} ${checkRes.stdout}`)
+      ) {
+        checkRes = await execSudoOnTarget(
+          target,
+          buildRawHeadscaleCmd(server, `policy check -f ${shellQuote(tmpFile)}`),
+          { timeoutMs: 10_000 }
+        );
+      }
+    }
+
+    if (checkRes.exitCode === 0) {
+      return { ok: true };
+    }
+
+    const detail = `${checkRes.stderr} ${checkRes.stdout}`.trim();
+    const lower = detail.toLowerCase();
+    // Older Headscale versions lack `policy check` -> skip check gracefully
+    if (
+      lower.includes("unknown command") ||
+      lower.includes("unknown flag") ||
+      checkRes.needsSudoPassword
+    ) {
+      return { ok: true };
+    }
+
+    return {
+      ok: false,
+      error: detail || "La política no pasó la validación de Headscale.",
+    };
+  } finally {
+    await execOnTarget(target, `rm -f ${shellQuote(tmpFile)}`, { timeoutMs: 4000 }).catch(
+      () => {}
+    );
+  }
+}
+
+/**
+ * Applies a compiled HuJSON policy to Headscale with validation, automatic backup,
+ * automatic `policy.path` activation in config.yaml when empty, reload/restart,
  * and sudo password prompt support if sudo requires authentication.
  */
 export async function applyPolicyToHeadscale(
@@ -922,6 +1110,7 @@ export async function applyPolicyToHeadscale(
 ): Promise<{
   ok: boolean;
   backupPath?: string;
+  configUpdated?: boolean;
   needsSudoPassword?: boolean;
   wrongPassword?: boolean;
   message: string;
@@ -986,14 +1175,23 @@ export async function applyPolicyToHeadscale(
     };
   }
 
-  // 3. File policy mode: backup existing file -> write new file -> reload Headscale
+  // 3. File policy mode: validate -> backup -> write ACL -> ensure config.yaml policy.path -> reload/restart
   if (!server.aclPath) {
     return { ok: false, message: "No se definió ruta de archivo ACL." };
   }
 
+  // 3a. Validate HuJSON before overwriting live ACL file
+  const validation = await validatePolicyWithHeadscale(server, hujson, timestamp);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      message: `Política rechazada por headscale policy check: ${validation.error}`,
+    };
+  }
+
   const backupPath = `${server.aclPath}.bak-${timestamp}`;
 
-  // Attempt backup (direct or via sudo)
+  // 3b. Attempt backup (direct or via sudo)
   const backupDirect = await execOnTarget(
     target,
     `if [ -f ${shellQuote(server.aclPath)} ]; then cp ${shellQuote(server.aclPath)} ${shellQuote(backupPath)}; fi`
@@ -1006,7 +1204,7 @@ export async function applyPolicyToHeadscale(
     );
   }
 
-  // Write ACL file (automatically falls back to sudo -n or session sudo password)
+  // 3c. Write ACL file (automatically falls back to sudo -n or session sudo password)
   const writeRes = await writeFileOnTarget(
     target,
     server.aclPath,
@@ -1035,39 +1233,108 @@ export async function applyPolicyToHeadscale(
   // Re-save tacl.yaml in /etc/headscale now that sudo password may be cached in session
   await saveRemoteTaclState(server, state);
 
-  // Reload Headscale (direct first, then sudo with session password if needed)
+  // 3d. Verify Headscale config.yaml actually points `policy.path` to the ACL file
+  let configUpdated = false;
+  if (server.configPath) {
+    let cfgRead = await readFileOnTarget(target, server.configPath, server.useSudo);
+    if (!cfgRead.ok && !server.useSudo) {
+      cfgRead = await readFileOnTarget(target, server.configPath, true);
+    }
+    if (cfgRead.ok) {
+      const parsedCfg = parsePolicyFromHeadscaleYaml(
+        cfgRead.content,
+        dirname(server.configPath)
+      );
+      if (parsedCfg.policyMode === "file" && !parsedCfg.policyPathConfigured) {
+        const targetPolicyPath =
+          server.deployMode === "container"
+            ? `/etc/headscale/${basename(server.aclPath)}`
+            : server.aclPath;
+        const patched = patchHeadscalePolicyPathInYaml(cfgRead.content, targetPolicyPath);
+        if (patched.changed) {
+          const cfgBackup = `${server.configPath}.bak-${timestamp}`;
+          const cfgBakDirect = await execOnTarget(
+            target,
+            `cp ${shellQuote(server.configPath)} ${shellQuote(cfgBackup)}`
+          );
+          if (cfgBakDirect.exitCode !== 0) {
+            await execSudoOnTarget(
+              target,
+              `cp ${shellQuote(server.configPath)} ${shellQuote(cfgBackup)}`,
+              { timeoutMs: 8000 }
+            );
+          }
+
+          const cfgWrite = await writeFileOnTarget(
+            target,
+            server.configPath,
+            patched.updated,
+            server.useSudo
+          );
+          if (!cfgWrite.ok) {
+            if (cfgWrite.needsSudoPassword) {
+              return {
+                ok: false,
+                backupPath,
+                needsSudoPassword: true,
+                wrongPassword: cfgWrite.wrongPassword,
+                message: cfgWrite.wrongPassword
+                  ? "Contraseña sudo incorrecta."
+                  : `Se requiere contraseña sudo para activar policy.path en ${server.configPath}.`,
+              };
+            }
+            return {
+              ok: false,
+              backupPath,
+              message: `ACL escrita, pero policy.path está vacío en ${server.configPath} y no se pudo actualizar: ${cfgWrite.error}`,
+            };
+          }
+          configUpdated = true;
+        }
+      }
+    }
+  }
+
+  // 3e. Reload (or Restart if config.yaml was modified, since SIGHUP does not reload config.yaml!)
   let reloadOk = false;
   let reloadErr = "";
   if (server.deployMode === "container") {
     const runtime = server.containerRuntime ?? "docker";
     const container = server.containerName || "headscale";
-    const cmd = `${runtime} kill -s HUP ${shellQuote(container)}`;
+    const cmd = configUpdated
+      ? `${runtime} restart ${shellQuote(container)}`
+      : `${runtime} kill -s HUP ${shellQuote(container)}`;
     const direct = server.useSudo
-      ? await execSudoOnTarget(target, cmd, { timeoutMs: 8000 })
-      : { ...(await execOnTarget(target, cmd, { timeoutMs: 8000 })), needsSudoPassword: false };
+      ? await execSudoOnTarget(target, cmd, { timeoutMs: 12_000 })
+      : { ...(await execOnTarget(target, cmd, { timeoutMs: 12_000 })), needsSudoPassword: false };
     if (direct.exitCode === 0) {
       reloadOk = true;
     } else {
-      const elevated = await execSudoOnTarget(target, cmd, { timeoutMs: 8000 });
+      const elevated = await execSudoOnTarget(target, cmd, { timeoutMs: 12_000 });
       reloadOk = elevated.exitCode === 0;
       reloadErr = elevated.stderr.trim();
     }
   } else {
-    const cmd = "systemctl reload headscale 2>/dev/null || pkill -HUP headscale";
-    const direct = await execOnTarget(target, cmd, { timeoutMs: 8000 });
+    const cmd = configUpdated
+      ? "systemctl restart headscale"
+      : "systemctl reload headscale 2>/dev/null || pkill -HUP headscale";
+    const direct = await execOnTarget(target, cmd, { timeoutMs: 12_000 });
     if (direct.exitCode === 0) {
       reloadOk = true;
     } else {
-      const elevated = await execSudoOnTarget(target, cmd, { timeoutMs: 8000 });
+      const elevated = await execSudoOnTarget(target, cmd, { timeoutMs: 12_000 });
       if (elevated.exitCode === 0) {
         reloadOk = true;
       } else if (elevated.needsSudoPassword) {
         return {
           ok: false,
           backupPath,
+          configUpdated,
           needsSudoPassword: true,
           wrongPassword: elevated.wrongPassword,
-          message: "ACL escrita, pero se requiere contraseña sudo para recargar el servicio headscale.",
+          message: configUpdated
+            ? "ACL y config.yaml actualizados, pero se requiere contraseña sudo para reiniciar headscale."
+            : "ACL escrita, pero se requiere contraseña sudo para recargar el servicio headscale.",
         };
       } else {
         reloadErr = elevated.stderr.trim();
@@ -1079,13 +1346,39 @@ export async function applyPolicyToHeadscale(
     return {
       ok: true,
       backupPath,
-      message: `ACL escrita en ${server.aclPath} (backup en ${backupPath}), pero recarga manual requerida: ${reloadErr}`,
+      configUpdated,
+      message: configUpdated
+        ? `ACL y policy.path escritos (backup en ${backupPath}), pero reinicio manual requerido: ${reloadErr}`
+        : `ACL escrita en ${server.aclPath} (backup en ${backupPath}), pero recarga manual requerida: ${reloadErr}`,
     };
+  }
+
+  // 3f. Post-reload sanity check: ensure Headscale actually loaded the policy
+  if (configUpdated) {
+    await Bun.sleep(800);
+  }
+  const verifyRes = await runHeadscaleSubcommand(server, "policy get", 6000);
+  if (verifyRes.exitCode !== 0) {
+    const verifyErr = `${verifyRes.stderr} ${verifyRes.stdout}`.toLowerCase();
+    if (
+      verifyErr.includes('reading policy from path ""') ||
+      verifyErr.includes("no such file or directory")
+    ) {
+      return {
+        ok: false,
+        backupPath,
+        configUpdated,
+        message: `Headscale sigue sin cargar la política tras recargar (${verifyRes.stderr.trim() || verifyRes.stdout.trim()}). Verifica policy.path en ${server.configPath} y reinicia Headscale.`,
+      };
+    }
   }
 
   return {
     ok: true,
     backupPath,
-    message: `Política aplicada y Headscale recargado (backup: ${backupPath}).`,
+    configUpdated,
+    message: configUpdated
+      ? `policy.path activado en ${server.configPath}, política aplicada y Headscale reiniciado (backup: ${backupPath}).`
+      : `Política aplicada y Headscale recargado (backup: ${backupPath}).`,
   };
 }

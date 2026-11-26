@@ -4,6 +4,7 @@ import { loadLocalConfig, saveLocalConfig } from "../engine/store.ts";
 import { createDemoEnvironment } from "../ssh/demo-data.ts";
 import { getLocalTailscaleInfo, type LocalTailscaleInfo } from "../ssh/discovery.ts";
 import {
+  checkServerPolicyPathConfigured,
   detectRemoteTailscaleIdentity,
   fetchCurrentPolicyRaw,
   fetchHeadscaleInventory,
@@ -82,12 +83,13 @@ export function App({ demoMode, forceRescan }: AppProps) {
         message: `Conectando con ${cfg.server.hostAlias}...`,
       });
 
-      const [identity, inv, pol, savedState, tsInfo] = await Promise.all([
+      const [identity, inv, pol, savedState, tsInfo, policyPathConfigured] = await Promise.all([
         detectRemoteTailscaleIdentity(serverToTarget(cfg.server)),
         fetchHeadscaleInventory(cfg.server),
         fetchCurrentPolicyRaw(cfg.server),
         loadStateWithLocalPriority(cfg.server),
         getLocalTailscaleInfo(),
+        checkServerPolicyPathConfigured(cfg.server),
       ]);
 
       if (inv.error || !savedState.state.initialized) {
@@ -97,12 +99,22 @@ export function App({ demoMode, forceRescan }: AppProps) {
       }
 
       const resolvedBase = inv.resolvedServer ?? cfg.server;
+      const cleanOldIp = resolvedBase.serverTailscaleIp?.replace(/^=+/, "") || undefined;
+      const cleanOldHost = resolvedBase.serverRemoteHostname?.replace(/^=+/, "") || undefined;
       const enrichedServer: ServerConfig = {
         ...resolvedBase,
-        serverTailscaleIp: identity.tailscaleIp ?? resolvedBase.serverTailscaleIp,
-        serverRemoteHostname:
-          identity.remoteHostname ?? resolvedBase.serverRemoteHostname,
+        serverTailscaleIp: identity.tailscaleIp ?? cleanOldIp,
+        serverRemoteHostname: identity.remoteHostname ?? cleanOldHost,
+        policyPathConfigured,
       };
+
+      if (
+        enrichedServer.serverTailscaleIp !== cfg.server.serverTailscaleIp ||
+        enrichedServer.serverRemoteHostname !== cfg.server.serverRemoteHostname ||
+        enrichedServer.policyPathConfigured !== cfg.server.policyPathConfigured
+      ) {
+        await saveLocalConfig({ version: 1, server: enrichedServer }).catch(() => {});
+      }
 
       setBoot({
         status: "ready",

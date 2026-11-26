@@ -162,6 +162,7 @@ export interface ServerConfig {
   // Paths on server
   configPath: string;
   aclPath?: string;
+  policyPathConfigured?: boolean;
   taclStatePath: string;
 }
 

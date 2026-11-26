@@ -1,20 +1,28 @@
 #!/usr/bin/env bun
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
+import pkg from "../package.json";
 import { App } from "./tui/App.tsx";
 
+const VERSION = pkg.version;
 const args = new Set(process.argv.slice(2));
 
+if (args.has("--version") || args.has("-v")) {
+  console.log(`tacl v${VERSION}`);
+  process.exit(0);
+}
+
 if (args.has("--help") || args.has("-h")) {
-  console.log(`tacl — TUI interactiva para administrar ACLs de Headscale
+  console.log(`tacl v${VERSION} — TUI interactiva para administrar ACLs de Headscale
 
 Uso:
-  bun run src/index.tsx [opciones]
+  tacl [opciones]
 
 Opciones:
-  --demo      Inicia en modo demostración con dispositivos y reglas simuladas (no toca Headscale)
-  --rescan    Fuerza el asistente de autodescubrimiento SSH y reconfiguración del servidor
-  -h, --help  Muestra esta ayuda
+  --demo         Inicia en modo demostración con dispositivos y reglas simuladas (no toca Headscale)
+  --rescan       Fuerza el asistente de autodescubrimiento SSH y reconfiguración del servidor
+  -v, --version  Muestra la versión instalada
+  -h, --help     Muestra esta ayuda
 
 Atajos dentro de la TUI:
   ← / →, Tab, 1-4   Cambiar entre pestañas (Dispositivos, Perfiles, Usuarios, Conexiones Directas)

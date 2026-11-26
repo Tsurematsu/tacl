@@ -7,7 +7,12 @@ import {
   setSudoPassword,
   type SshTarget,
 } from "../src/ssh/executor.ts";
-import { parseNativeProbeOutput } from "../src/ssh/headscale.ts";
+import {
+  parseNativeProbeOutput,
+  parsePolicyFromHeadscaleYaml,
+  parseRemoteIdentityOutput,
+  patchHeadscalePolicyPathInYaml,
+} from "../src/ssh/headscale.ts";
 
 describe("parseSshConfigContent", () => {
   test("parses concrete hosts and skips wildcards and Match blocks", () => {
@@ -95,5 +100,78 @@ describe("sudo password helpers", () => {
     expect(getSudoPassword(target)).toBe("secret123");
     clearSudoPassword(target);
     expect(getSudoPassword(target)).toBeUndefined();
+  });
+});
+
+describe("Headscale policy.path & remote identity parsers", () => {
+  test("parseRemoteIdentityOutput strips key= prefix cleanly", () => {
+    const parsed = parseRemoteIdentityOutput("TS_IP=100.64.0.3\nHOST=oracle\n");
+    expect(parsed).toEqual({
+      tailscaleIp: "100.64.0.3",
+      remoteHostname: "oracle",
+    });
+  });
+
+  test("parsePolicyFromHeadscaleYaml flags empty policy.path as unconfigured", () => {
+    const emptyPathYaml = `
+policy:
+  mode: file
+  path: ""
+`;
+    expect(parsePolicyFromHeadscaleYaml(emptyPathYaml, "/etc/headscale")).toEqual({
+      policyMode: "file",
+      aclPath: "/etc/headscale/acl.hujson",
+      policyPathConfigured: false,
+    });
+
+    const configuredYaml = `
+policy:
+  mode: file
+  path: "/etc/headscale/custom.hujson"
+`;
+    expect(parsePolicyFromHeadscaleYaml(configuredYaml, "/etc/headscale")).toEqual({
+      policyMode: "file",
+      aclPath: "/etc/headscale/custom.hujson",
+      policyPathConfigured: true,
+    });
+
+    const dbYaml = `
+policy:
+  mode: database
+`;
+    expect(parsePolicyFromHeadscaleYaml(dbYaml, "/etc/headscale")).toEqual({
+      policyMode: "database",
+      policyPathConfigured: true,
+    });
+  });
+
+  test("patchHeadscalePolicyPathInYaml activates empty policy.path while preserving comments", () => {
+    const sample = `# Headscale config
+policy:
+  # The mode can be "file" or "database"
+  mode: file
+  # Path to HuJSON file
+  path: ""
+
+dns:
+  magic_dns: true
+`;
+    const res = patchHeadscalePolicyPathInYaml(sample, "/etc/headscale/acl.hujson");
+    expect(res.changed).toBe(true);
+    expect(res.updated).toContain('  path: "/etc/headscale/acl.hujson"');
+    expect(res.updated).toContain("# Path to HuJSON file");
+    expect(res.updated).toContain("magic_dns: true");
+
+    // Re-running is idempotent
+    const second = patchHeadscalePolicyPathInYaml(res.updated, "/etc/headscale/acl.hujson");
+    expect(second.changed).toBe(false);
+    expect(second.updated).toBe(res.updated);
+  });
+
+  test("patchHeadscalePolicyPathInYaml inserts path when policy block only has mode", () => {
+    const sample = `policy:\n  mode: file\ndns:\n  magic_dns: true\n`;
+    const res = patchHeadscalePolicyPathInYaml(sample, "/etc/headscale/acl.hujson");
+    expect(res.changed).toBe(true);
+    expect(res.updated).toContain('  mode: file\n  path: "/etc/headscale/acl.hujson"\n');
   });
 });

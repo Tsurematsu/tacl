@@ -1,6 +1,6 @@
 {
   "name": "tacl",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Interactive TUI for managing Headscale ACLs with Device > Profile > User precedence",
   "type": "module",
   "bin": {

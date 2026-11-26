@@ -17,6 +17,8 @@ export interface ApplyDiffModalProps {
   existingPolicyRaw: string;
   unresolvedConflictCount: number;
   hostLabel: string;
+  policyPathUnconfigured?: boolean;
+  configPath?: string;
   isDemo: boolean;
   onProvideSudoPassword: (password: string) => void;
   onConfirmApply: () => Promise<ApplyResult>;
@@ -29,6 +31,8 @@ export function ApplyDiffModal({
   existingPolicyRaw,
   unresolvedConflictCount,
   hostLabel,
+  policyPathUnconfigured,
+  configPath,
   isDemo,
   onProvideSudoPassword,
   onConfirmApply,
@@ -153,6 +157,16 @@ export function ApplyDiffModal({
           </text>
         </box>
       ))}
+
+      {policyPathUnconfigured ? (
+        <box border borderColor={THEME.borderWarn} paddingX={1} backgroundColor={THEME.surfaceAlt}>
+          <text fg={THEME.yellow}>
+            <b>
+              {`⚠ policy.path está vacío en ${configPath || "config.yaml"}: al aplicar, tacl lo activará automáticamente (con backup) y reiniciará Headscale.`}
+            </b>
+          </text>
+        </box>
+      ) : null}
 
       {compiled.isPassthrough ? (
         <box paddingX={1} backgroundColor={THEME.surfaceAlt}>

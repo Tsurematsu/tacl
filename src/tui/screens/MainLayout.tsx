@@ -104,6 +104,9 @@ export function MainLayout({
   const [devices, setDevices] = useState<Device[]>(initialDevices);
   const [state, setState] = useState<TaclState>(initialState);
   const [existingPolicyRaw, setExistingPolicyRaw] = useState(initialPolicyRaw);
+  const [policyPathConfigured, setPolicyPathConfigured] = useState(
+    server.policyPathConfigured !== false
+  );
   const [dirty, setDirty] = useState(Boolean(initialState.uiState?.hasUnappliedChanges));
   const [exiting, setExiting] = useState(false);
 
@@ -626,15 +629,15 @@ export function MainLayout({
       return;
     }
 
-    // Refresh inventory (r)
-    if (key.name === "r") {
-      void handleRefresh();
-      return;
-    }
-
     // Reconfigure server (Shift+R)
     if (key.shift && key.name === "r" && !isDemo) {
       onRescan();
+      return;
+    }
+
+    // Refresh inventory (r)
+    if (key.name === "r" && !key.shift) {
+      void handleRefresh();
       return;
     }
 
@@ -1287,6 +1290,10 @@ export function MainLayout({
           existingPolicyRaw={existingPolicyRaw}
           unresolvedConflictCount={resolution.conflicts.length}
           hostLabel={`${server.user ? `${server.user}@` : ""}${server.hostAlias}`}
+          policyPathUnconfigured={
+            !isDemo && server.policyMode === "file" && !policyPathConfigured
+          }
+          configPath={server.configPath}
           isDemo={isDemo}
           onProvideSudoPassword={(pwd) => {
             setSudoPassword(serverToTarget(server), pwd);
@@ -1307,6 +1314,9 @@ export function MainLayout({
             if (res.ok) {
               setExistingPolicyRaw(compiled.hujson);
               setDirty(false);
+              if (res.configUpdated) {
+                setPolicyPathConfigured(true);
+              }
             }
             return {
               ok: res.ok,

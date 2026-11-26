@@ -530,6 +530,7 @@ export function SetupWizard({ onComplete, onExit }: SetupWizardProps) {
           sudoUser: nativeDetection.sudoUser,
           configPath: nativeDetection.configPath,
           aclPath: nativeDetection.aclPath,
+          policyPathConfigured: nativeDetection.policyPathConfigured,
           taclStatePath: nativeDetection.taclStatePath,
         };
         void loadServerData(server);
@@ -1019,7 +1020,13 @@ export function SetupWizard({ onComplete, onExit }: SetupWizardProps) {
                 }`}
               </text>
               {nativeDetection.aclPath ? (
-                <text fg={THEME.subtext}>{`Archivo ACL: ${nativeDetection.aclPath}`}</text>
+                <text fg={nativeDetection.policyPathConfigured ? THEME.subtext : THEME.yellow}>
+                  {`Archivo ACL: ${nativeDetection.aclPath}${
+                    nativeDetection.policyMode === "file" && !nativeDetection.policyPathConfigured
+                      ? "  (⚠ policy.path vacío en config.yaml — se activará al aplicar)"
+                      : ""
+                  }`}
+                </text>
               ) : null}
               <text fg={THEME.subtext}>{`Estado tacl: ${nativeDetection.taclStatePath}`}</text>
               <text fg={THEME.muted}>
@@ -1071,6 +1078,7 @@ export function SetupWizard({ onComplete, onExit }: SetupWizardProps) {
               useSudo: inspected.useSudo,
               configPath: inspected.configPath,
               aclPath: inspected.aclPath,
+              policyPathConfigured: inspected.policyPathConfigured,
               taclStatePath: inspected.taclStatePath,
             };
             void loadServerData(server);
