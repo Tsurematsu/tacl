@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>tacl — TUI interactiva para ACLs de Headscale</title>
+    <meta
+      name="description"
+      content="Administra visualmente las políticas ACL de Headscale desde tu terminal con precedencia Dispositivo > Perfil > Usuario, protección SSH automática y compilación segura a HuJSON."
+    />
+    <link rel="icon" type="image/jpeg" href="images/logo.jpeg" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="container nav-inner">
+        <a class="brand" href="#">
+          <img src="images/logo.jpeg" alt="Logo de tacl" />
+          <span>tacl</span>
+        </a>
+
+        <button
+          id="nav-toggle"
+          class="nav-toggle"
+          aria-label="Abrir menú de navegación"
+          aria-expanded="false"
+        >
+          ☰
+        </button>
+
+        <nav id="nav-links" class="nav-links" aria-label="Navegación principal">
+          <a href="#caracteristicas">Características</a>
+          <a href="#instalacion">Instalación</a>
+          <a href="#como-usar">Cómo usar</a>
+          <a href="#precedencia">Precedencia</a>
+          <a href="#atajos">Atajos</a>
+          <a
+            class="nav-cta"
+            href="https://github.com/Tsurematsu/tacl/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            v0.1.0 · Releases
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <!-- Hero -->
+      <section class="hero">
+        <div class="container">
+          <div class="hero-logo-wrap">
+            <img class="hero-logo" src="images/logo.jpeg" alt="Logo de tacl" />
+          </div>
+
+          <div>
+            <span class="hero-badge">
+              <span class="dot" aria-hidden="true"></span>
+              v0.1.0 · Binarios autocontenidos para Linux y Windows
+            </span>
+          </div>
+
+          <h1>
+            Administra las ACLs de <span class="gradient-text">Headscale</span>
+            desde tu terminal
+          </h1>
+
+          <p class="hero-lead">
+            <strong>tacl</strong> es una TUI interactiva que transforma un modelo
+            jerárquico claro (<code>Dispositivo &gt; Perfil &gt; Usuario</code>) en
+            políticas <strong>HuJSON</strong> limpias y válidas, con detección de
+            conflictos, protección automática de tu SSH y vista previa <em>diff</em>.
+          </p>
+
+          <div class="quick-install" aria-label="Comando de instalación rápida">
+            <div class="quick-install-cmd">
+              <span class="prompt">$</span>curl -fsSL https://raw.githubusercontent.com/Tsurematsu/tacl/main/docs/install.sh | sh
+            </div>
+            <button
+              class="copy-btn"
+              type="button"
+              data-copy="curl -fsSL https://raw.githubusercontent.com/Tsurematsu/tacl/main/docs/install.sh | sh"
+            >
+              Copiar
+            </button>
+          </div>
+
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#instalacion">Instalar tacl</a>
+            <a class="btn btn-secondary" href="#como-usar">Ver guía de uso</a>
+            <a
+              class="btn btn-secondary"
+              href="https://github.com/Tsurematsu/tacl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Ver en GitHub
+            </a>
+          </div>
+
+          <div class="terminal-frame">
+            <div class="terminal-bar">
+              <div class="terminal-dots" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+              <span class="terminal-title">tacl — Vista principal (clic para ampliar)</span>
+              <span class="terminal-title">SSH 🛡 protegido</span>
+            </div>
+            <div class="terminal-body">
+              <img
+                class="zoomable"
+                src="images/main-screen.png"
+                alt="Vista principal de tacl mostrando las 4 pestañas y la tabla agrupada de reglas"
+                data-caption="Vista principal de tacl: barra superior con protección SSH, 4 pestañas y tabla agrupada por origen."
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Características -->
+      <section id="caracteristicas">
+        <div class="container">
+          <div class="section-header">
+            <span class="section-eyebrow">Por qué usar tacl</span>
+            <h2>Control total de tu red Tailscale / Headscale sin editar JSON a mano</h2>
+            <p>
+              Diseñada para administradores que quieren claridad visual, seguridad al
+              aplicar cambios y cero bloqueos accidentales.
+            </p>
+          </div>
+
+          <div class="feature-grid">
+            <article class="feature-card">
+              <div class="feature-icon" aria-hidden="true">⬡</div>
+              <h3>Precedencia estricta</h3>
+              <p>
+                Evalúa cada par de nodos en orden <code>Dispositivo &gt; Perfil &gt; Usuario &gt; Default</code>.
+                Siempre sabes qué regla manda y por qué.
+              </p>
+            </article>
+
+            <article class="feature-card">
+              <div class="feature-icon" aria-hidden="true">🛡</div>
+              <h3>Protección SSH en 3 capas</h3>
+              <p>
+                Identifica automáticamente tu equipo local y el servidor Headscale para
+                impedir que te bloquees fuera de tu acceso <code>TCP/22</code>.
+              </p>
+            </article>
+
+            <article class="feature-card">
+              <div class="feature-icon" aria-hidden="true">⚡</div>
+              <h3>Autodescubrimiento SSH</h3>
+              <p>
+                Sondea hosts accesibles por llave desde <code>~/.ssh/config</code>,
+                Tailscale y <code>localhost</code>, o permite conexión manual con lista
+                desplegable.
+              </p>
+            </article>
+
+            <article class="feature-card">
+              <div class="feature-icon" aria-hidden="true">📦</div>
+              <h3>Nativo y Contenedor</h3>
+              <p>
+                Compatible con instalaciones nativas (<code>systemd</code>/binario) y
+                contenedores <strong>Docker / Podman</strong> con explorador remoto de
+                carpetas.
+              </p>
+            </article>
+
+            <article class="feature-card">
+              <div class="feature-icon" aria-hidden="true">⚖</div>
+              <h3>Resolución de conflictos</h3>
+              <p>
+                Un dispositivo puede pertenecer a múltiples perfiles. Si dos reglas chocan,
+                <code>tacl</code> te pregunta cuál prevalece y guarda tu decisión.
+              </p>
+            </article>
+
+            <article class="feature-card">
+              <div class="feature-icon" aria-hidden="true">⇄</div>
+              <h3>Diff HuJSON y Backups</h3>
+              <p>
+                Preserva secciones externas (<code>ssh</code>, <code>autoApprovers</code>,
+                <code>tagOwners</code>), muestra el diff línea por línea y respalda tu
+                política previa antes de recargar.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- Instalación -->
+      <section id="instalacion">
+        <div class="container">
+          <div class="section-header">
+            <span class="section-eyebrow">Instalación rápida</span>
+            <h2>Lista en segundos como comando global <code>tacl</code></h2>
+            <p>
+              Los binarios son completamente autocontenidos: no necesitas instalar Bun ni
+              Node.js en tu sistema.
+            </p>
+          </div>
+
+          <div class="tabs-wrapper" data-tabs>
+            <div class="tab-list" role="tablist" aria-label="Métodos de instalación">
+              <button class="tab-btn active" role="tab" aria-selected="true" data-tab="linux">
+                Linux (curl) — Recomendado
+              </button>
+              <button class="tab-btn" role="tab" aria-selected="false" data-tab="windows">
+                Windows (.exe)
+              </button>
+              <button class="tab-btn" role="tab" aria-selected="false" data-tab="source">
+                Desde código fuente (Bun)
+              </button>
+            </div>
+
+            <!-- Linux -->
+            <div class="tab-panel active" data-panel="linux">
+              <p>
+                Ejecuta el instalador oficial vía <code>curl</code>. Descarga el binario
+                para <strong>Linux x86_64</strong> desde GitHub Releases y deja el comando
+                <code>tacl</code> listo en tu <code>PATH</code> (<code>/usr/local/bin</code>
+                o <code>~/.local/bin</code>):
+              </p>
+
+              <div class="code-block">
+                <pre><code>curl -fsSL https://raw.githubusercontent.com/Tsurematsu/tacl/main/docs/install.sh | sh</code></pre>
+                <button
+                  class="copy-btn"
+                  type="button"
+                  data-copy="curl -fsSL https://raw.githubusercontent.com/Tsurematsu/tacl/main/docs/install.sh | sh"
+                >
+                  Copiar
+                </button>
+              </div>
+
+              <p>Una vez instalado, ejecútalo directamente desde cualquier directorio:</p>
+              <div class="code-block">
+                <pre><code>tacl           # Conecta al servidor guardado o abre el asistente inicial
+tacl --demo    # Prueba toda la TUI con datos simulados (sin tocar Headscale)
+tacl --rescan  # Cambia de servidor o alterna entre modo Nativo y Contenedor
+tacl --help    # Ver ayuda rápida y atajos</code></pre>
+                <button
+                  class="copy-btn"
+                  type="button"
+                  data-copy="tacl --demo"
+                >
+                  Copiar demo
+                </button>
+              </div>
+
+              <div class="note-box">
+                <strong>Opciones avanzadas del instalador:</strong> puedes fijar una
+                versión o ruta personalizada con variables de entorno, por ejemplo
+                <code>TACL_VERSION=v0.1.0 TACL_INSTALL_DIR="$HOME/bin"</code>. También
+                puedes revisar el código del script en
+                <a href="install.sh"><code>install.sh</code></a> antes de ejecutarlo.
+              </div>
+            </div>
+
+            <!-- Windows -->
+            <div class="tab-panel" data-panel="windows">
+              <p>
+                Descarga el binario autocontenido para <strong>Windows x64</strong> desde
+                PowerShell o directamente desde Releases:
+              </p>
+
+              <div class="code-block">
+                <pre><code>Invoke-WebRequest -Uri "https://github.com/Tsurematsu/tacl/releases/latest/download/tacl-windows-x64.exe" -OutFile "tacl.exe"
+.\tacl.exe --demo</code></pre>
+                <button
+                  class="copy-btn"
+                  type="button"
+                  data-copy='Invoke-WebRequest -Uri "https://github.com/Tsurematsu/tacl/releases/latest/download/tacl-windows-x64.exe" -OutFile "tacl.exe"'
+                >
+                  Copiar
+                </button>
+              </div>
+
+              <div class="note-box">
+                <strong>Descarga directa:</strong>
+                <a
+                  href="https://github.com/Tsurematsu/tacl/releases/latest/download/tacl-windows-x64.exe"
+                >
+                  tacl-windows-x64.exe
+                </a>
+                · Añade la carpeta donde guardes <code>tacl.exe</code> a tu variable de
+                entorno <code>PATH</code> para ejecutarlo como <code>tacl</code> desde
+                cualquier terminal.
+              </div>
+            </div>
+
+            <!-- Source -->
+            <div class="tab-panel" data-panel="source">
+              <p>
+                Si deseas ejecutar desde el código fuente o compilar tus propios binarios
+                (requiere <strong>Bun &gt;= 1.3</strong>):
+              </p>
+
+              <div class="code-block">
+                <pre><code>git clone https://github.com/Tsurematsu/tacl.git
+cd tacl
+bun install
+bun run start        # Modo normal
+bun run demo         # Modo demostración
+bun run build        # Compila Linux x64 y Windows x64 en dist/</code></pre>
+                <button
+                  class="copy-btn"
+                  type="button"
+                  data-copy="git clone https://github.com/Tsurematsu/tacl.git && cd tacl && bun install && bun run demo"
+                >
+                  Copiar
+                </button>
+              </div>
+
+              <div class="note-box">
+                <strong>Requisitos para modo real:</strong> cliente OpenSSH (<code>ssh</code>)
+                con acceso por llave al servidor Headscale. Opcionalmente,
+                <code>tailscale</code> CLI para descubrir peers e identificar tu equipo
+                local en la protección SSH.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cómo usar -->
+      <section id="como-usar">
+        <div class="container">
+          <div class="section-header">
+            <span class="section-eyebrow">Flujo paso a paso</span>
+            <h2>Cómo usar tacl de principio a fin</h2>
+            <p>
+              Desde el primer escaneo SSH hasta la publicación del HuJSON en Headscale.
+              Haz clic en cualquier captura para verla en tamaño completo.
+            </p>
+          </div>
+
+          <div class="steps-list">
+            <!-- Paso 1 -->
+            <div class="step-row">
+              <div class="step-content">
+                <span class="step-num">PASO 01</span>
+                <h3>Conecta tu servidor Headscale</h3>
+                <p>
+                  Al arrancar por primera vez (o con <code>tacl --rescan</code>), el
+                  asistente detecta automáticamente los hosts accesibles por llave SSH y
+                  marca aquellos donde corre Headscale.
+                </p>
+                <ul>
+                  <li>
+                    <strong>Automático o Manual:</strong> escanea <code>~/.ssh/config</code>,
+                    Tailscale y <code>localhost</code>, o escribe el servidor y usuario a
+                    mano con lista desplegable (<kbd>Espacio</kbd> / <kbd>→</kbd>).
+                  </li>
+                  <li>
+                    <strong>Nativo o Contenedor:</strong> autodetecta binario/<code>systemd</code>
+                    o abre un explorador remoto para elegir la carpeta de tu contenedor.
+                  </li>
+                  <li>
+                    <strong>Inicio amable:</strong> elige entre mantener Headscale sin
+                    restricciones extra, aislar por Usuarios o empezar en modo estricto
+                    (<code>Default-Deny</code>).
+                  </li>
+                </ul>
+              </div>
+              <div class="step-media">
+                <div class="terminal-frame">
+                  <div class="terminal-bar">
+                    <div class="terminal-dots" aria-hidden="true">
+                      <span></span><span></span><span></span>
+                    </div>
+                    <span class="terminal-title">SetupWizard</span>
+                  </div>
+                  <div class="terminal-body">
+                    <img
+                      class="zoomable"
+                      src="images/setup-wizard.png"
+                      alt="Asistente inicial de conexión SSH de tacl"
+                      data-caption="Paso 1: Asistente de conexión inicial con detección automática o ingreso manual."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paso 2 -->
+            <div class="step-row reverse">
+              <div class="step-content">
+                <span class="step-num">PASO 02</span>
+                <h3>Crea reglas guiadas en 3 pasos</h3>
+                <p>
+                  En las pestañas <strong>Dispositivos</strong>, <strong>Perfiles</strong>
+                  o <strong>Usuarios</strong>, pulsa <kbd>Espacio</kbd> para abrir el
+                  asistente guiado de conexión:
+                </p>
+                <ul>
+                  <li>
+                    <strong>Origen → Destino:</strong> selecciona las entidades con
+                    <kbd>↑</kbd>/<kbd>↓</kbd> y <kbd>Enter</kbd>.
+                  </li>
+                  <li>
+                    <strong>Dirección y Protocolo:</strong> elige entre
+                    <code>↔</code>, <code>→</code>, <code>←</code> o <code>✕</code> y
+                    protocolo <code>TCP</code>, <code>UDP</code> o <code>Ambos</code>.
+                  </li>
+                  <li>
+                    <strong>Checklist de puertos:</strong> marca servicios comunes
+                    (<code>*</code>, SSH, DNS, HTTP/S, RDP, PostgreSQL, etc.) o añade
+                    puertos y rangos personalizados con <kbd>a</kbd>.
+                  </li>
+                </ul>
+              </div>
+              <div class="step-media">
+                <div class="terminal-frame">
+                  <div class="terminal-bar">
+                    <div class="terminal-dots" aria-hidden="true">
+                      <span></span><span></span><span></span>
+                    </div>
+                    <span class="terminal-title">Asistente de conexión [Espacio]</span>
+                  </div>
+                  <div class="terminal-body">
+                    <img
+                      class="zoomable"
+                      src="images/quick-connect.png"
+                      alt="Asistente guiado de conexión con dirección, protocolo y checklist de puertos"
+                      data-caption="Paso 2: Asistente guiado de conexión (Espacio) para elegir dirección, protocolo y puertos."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paso 3 -->
+            <div class="step-row">
+              <div class="step-content">
+                <span class="step-num">PASO 03</span>
+                <h3>Agrupa dispositivos con Perfiles</h3>
+                <p>
+                  Pulsa <kbd>f</kbd> para crear o editar perfiles lógicos propios de
+                  <code>tacl</code> (por ejemplo <em>Servidores</em>, <em>IoT</em> o
+                  <em>Administradores</em>) sin depender de tags de Headscale.
+                </p>
+                <ul>
+                  <li>
+                    <strong>Filtro por usuario:</strong> usa <kbd>←</kbd>/<kbd>→</kbd> para
+                    filtrar dispositivos por propietario sin perder selecciones previas.
+                  </li>
+                  <li>
+                    <strong>Ocultar ya asignados:</strong> pulsa <kbd>o</kbd> para ver solo
+                    dispositivos sin perfil y <kbd>a</kbd> para marcar todos los visibles.
+                  </li>
+                  <li>
+                    <strong>Panel general:</strong> pulsa <kbd>a</kbd> en la tabla para
+                    inspeccionar todos los perfiles y editar cualquiera con <kbd>Enter</kbd>.
+                  </li>
+                </ul>
+              </div>
+              <div class="step-media">
+                <div class="terminal-frame">
+                  <div class="terminal-bar">
+                    <div class="terminal-dots" aria-hidden="true">
+                      <span></span><span></span><span></span>
+                    </div>
+                    <span class="terminal-title">Editor de perfiles [f]</span>
+                  </div>
+                  <div class="terminal-body">
+                    <img
+                      class="zoomable"
+                      src="images/profile-modal.png"
+                      alt="Modal de creación y edición de perfiles con filtro por usuario"
+                      data-caption="Paso 3: Creación y edición de perfiles con filtro por usuario y selección múltiple."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paso 4 -->
+            <div class="step-row reverse">
+              <div class="step-content">
+                <span class="step-num">PASO 04</span>
+                <h3>Resuelve conflictos entre perfiles</h3>
+                <p>
+                  Como un dispositivo puede estar en varios perfiles a la vez, si dos
+                  reglas de perfil generan efectos contradictorios sobre un mismo par,
+                  <code>tacl</code> detiene la ambigüedad al instante.
+                </p>
+                <ul>
+                  <li>
+                    <strong>Detección automática:</strong> abre el modal de conflictos en
+                    cuanto aparece una colisión (también accesible con <kbd>c</kbd>).
+                  </li>
+                  <li>
+                    <strong>Decisión persistente:</strong> muestra el efecto exacto de cada
+                    regla competidora para que elijas cuál gana y la recuerda en
+                    <code>tacl.yaml</code>.
+                  </li>
+                </ul>
+              </div>
+              <div class="step-media">
+                <div class="terminal-frame">
+                  <div class="terminal-bar">
+                    <div class="terminal-dots" aria-hidden="true">
+                      <span></span><span></span><span></span>
+                    </div>
+                    <span class="terminal-title">Resolución de conflictos [c]</span>
+                  </div>
+                  <div class="terminal-body">
+                    <img
+                      class="zoomable"
+                      src="images/conflict-modal.png"
+                      alt="Modal de resolución interactiva de conflictos multi-perfil"
+                      data-caption="Paso 4: Modal de resolución de conflictos cuando un par hereda reglas contradictorias."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paso 5 -->
+            <div class="step-row">
+              <div class="step-content">
+                <span class="step-num">PASO 05</span>
+                <h3>Audita el resultado en Conexiones Directas</h3>
+                <p>
+                  Cambia a la pestaña <strong>[4] Conexiones Directas</strong> para revisar
+                  la matriz final resuelta de todos los pares de dispositivos de tu red.
+                </p>
+                <ul>
+                  <li>
+                    <strong>Solo lectura:</strong> protege contra cambios accidentales y
+                    muestra en <strong>Regla activa</strong> qué nivel decidió cada acceso.
+                  </li>
+                  <li>
+                    <strong>Inspector detallado:</strong> pulsa <kbd>Enter</kbd> sobre
+                    cualquier fila para ver visibilidad en el NetMap y si el escudo
+                    <code>🛡</code> está activo.
+                  </li>
+                  <li>
+                    <strong>Agrupación inteligente:</strong> despliega destinos por origen
+                    con <kbd>Enter</kbd>, todos a la vez con <kbd>z</kbd> o cambia a vista
+                    plana con <kbd>g</kbd>.
+                  </li>
+                </ul>
+              </div>
+              <div class="step-media">
+                <div class="terminal-frame">
+                  <div class="terminal-bar">
+                    <div class="terminal-dots" aria-hidden="true">
+                      <span></span><span></span><span></span>
+                    </div>
+                    <span class="terminal-title">[4] Conexiones Directas · Solo lectura</span>
+                  </div>
+                  <div class="terminal-body">
+                    <img
+                      class="zoomable"
+                      src="images/direct-connections.png"
+                      alt="Pestaña Conexiones Directas con la matriz resuelta y la columna Regla activa"
+                      data-caption="Paso 5: Matriz efectiva en Conexiones Directas indicando qué nivel decidió cada par."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paso 6 -->
+            <div class="step-row reverse">
+              <div class="step-content">
+                <span class="step-num">PASO 06</span>
+                <h3>Revisa el Diff HuJSON y aplica con seguridad</h3>
+                <p>
+                  Cuando estés conforme con la matriz, pulsa <kbd>s</kbd> para compilar la
+                  política y revisar exactamente qué cambiará en tu servidor.
+                </p>
+                <ul>
+                  <li>
+                    <strong>Diff línea por línea:</strong> inspecciona adiciones
+                    (<code>+</code>), eliminaciones (<code>-</code>) y estadísticas de
+                    hosts y reglas.
+                  </li>
+                  <li>
+                    <strong>Backup automático:</strong> respalda tu ACL anterior
+                    (<code>.bak-&lt;timestamp&gt;</code>) antes de escribir el nuevo
+                    archivo.
+                  </li>
+                  <li>
+                    <strong>Recarga inteligente:</strong> aplica mediante <code>SIGHUP</code>
+                    (modo <code>file</code>) o <code>headscale policy set</code> (modo
+                    <code>database</code>), solicitando contraseña <code>sudo</code> en RAM
+                    solo si hace falta.
+                  </li>
+                </ul>
+              </div>
+              <div class="step-media">
+                <div class="terminal-frame">
+                  <div class="terminal-bar">
+                    <div class="terminal-dots" aria-hidden="true">
+                      <span></span><span></span><span></span>
+                    </div>
+                    <span class="terminal-title">Diff HuJSON y Aplicar [s]</span>
+                  </div>
+                  <div class="terminal-body">
+                    <img
+                      class="zoomable"
+                      src="images/apply-diff.png"
+                      alt="Vista previa del diff HuJSON y estadísticas antes de aplicar a Headscale"
+                      data-caption="Paso 6: Compilación a HuJSON, diff línea por línea y aplicación con respaldo automático."
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Precedencia y Seguridad SSH -->
+      <section id="precedencia">
+        <div class="container">
+          <div class="section-header">
+            <span class="section-eyebrow">Motor de reglas</span>
+            <h2>Jerarquía predecible y protección SSH garantizada</h2>
+            <p>
+              Como Headscale solo admite reglas <code>accept</code>, <code>tacl</code>
+              calcula la matriz completa y omite las conexiones bloqueadas para que esos
+              nodos sean 100% invisibles entre sí en el NetMap.
+            </p>
+          </div>
+
+          <div class="two-col">
+            <div class="panel-card">
+              <h3>Orden de precedencia</h3>
+              <p>Para cada par de dispositivos <code>(A, B)</code>, gana el nivel más alto:</p>
+
+              <div class="precedence-stack">
+                <div class="prec-item p1">
+                  <div class="prec-rank">1</div>
+                  <div>
+                    <strong>Dispositivo (Peso absoluto)</strong>
+                    <span>Regla directa A ↔ B. Siempre prevalece sobre perfiles y usuarios.</span>
+                  </div>
+                </div>
+                <div class="prec-item p2">
+                  <div class="prec-rank">2</div>
+                  <div>
+                    <strong>Perfil (Propio de tacl)</strong>
+                    <span>Agrupaciones flexibles con resolución interactiva ante conflictos.</span>
+                  </div>
+                </div>
+                <div class="prec-item p3">
+                  <div class="prec-rank">3</div>
+                  <div>
+                    <strong>Usuario (Headscale)</strong>
+                    <span>Reglas entre usuarios reales, incluyendo tráfico intra-usuario.</span>
+                  </div>
+                </div>
+                <div class="prec-item p4">
+                  <div class="prec-rank">4</div>
+                  <div>
+                    <strong>Política base (alternable con [m])</strong>
+                    <span>Default-Deny (bloquea todo lo no listado) o Sin restricción extra.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="symbol-grid">
+                <div class="symbol-pill">
+                  <span class="sym sym-green">↔</span><strong>Bidireccional:</strong> ambos inician
+                </div>
+                <div class="symbol-pill">
+                  <span class="sym sym-cyan">→ / ←</span><strong>Unidireccional:</strong> solo un sentido
+                </div>
+                <div class="symbol-pill">
+                  <span class="sym sym-red">✕</span><strong>Bloqueado:</strong> invisibles entre sí
+                </div>
+                <div class="symbol-pill">
+                  <span class="sym">🛡</span><strong>Protegido:</strong> enlace SSH seguro
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <h3>Protección automática SSH (🛡)</h3>
+              <p>
+                Nunca volverás a quedarte sin acceso SSH al servidor donde administras
+                Headscale:
+              </p>
+
+              <ul class="ssh-list">
+                <li>
+                  <strong>1. Identificación exacta del par</strong>
+                  Cruza tu equipo local (<code>tailscale status --json</code>) con la IP
+                  Tailscale, IP SSH o hostname remoto del servidor destino.
+                </li>
+                <li>
+                  <strong>2. Guardrails en la interfaz</strong>
+                  Muestra <code>🛡 SSH:&lt;puerto&gt;</code> en la barra superior y bloquea
+                  cualquier intento de denegar o quitar <code>TCP/&lt;puerto&gt;</code>
+                  para ese par.
+                </li>
+                <li>
+                  <strong>3. Inyección garantizada en el compilador</strong>
+                  Incluso bajo <code>Default-Deny</code> o bloqueos por Perfil/Usuario,
+                  emite siempre la regla <code>accept</code> necesaria y la destaca en el
+                  diff.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Atajos de teclado -->
+      <section id="atajos">
+        <div class="container">
+          <div class="section-header">
+            <span class="section-eyebrow">Referencia rápida</span>
+            <h2>Atajos de teclado y archivos gestionados</h2>
+            <p>Todo en <code>tacl</code> se controla ágilmente desde el teclado.</p>
+          </div>
+
+          <div class="tabs-wrapper" data-tabs>
+            <div class="tab-list" role="tablist" aria-label="Categorías de referencia">
+              <button class="tab-btn active" role="tab" aria-selected="true" data-tab="nav">
+                Navegación general
+              </button>
+              <button class="tab-btn" role="tab" aria-selected="false" data-tab="edit">
+                Edición (Pestañas 1–3)
+              </button>
+              <button class="tab-btn" role="tab" aria-selected="false" data-tab="files">
+                Archivos y persistencia
+              </button>
+            </div>
+
+            <div class="tab-panel active" data-panel="nav">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Atajo</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><kbd>←</kbd> <kbd>→</kbd> · <kbd>Tab</kbd> · <kbd>1</kbd>–<kbd>4</kbd></td>
+                    <td>Cambiar entre Dispositivos, Perfiles, Usuarios y Conexiones Directas</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>↑</kbd> <kbd>↓</kbd> · <kbd>k</kbd> <kbd>j</kbd></td>
+                    <td>Desplazarse por las filas de la tabla</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>Enter</kbd></td>
+                    <td>Desplegar/colapsar grupo de origen (o abrir Inspector en Conexiones Directas)</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>z</kbd> / <kbd>g</kbd></td>
+                    <td>Expandir/colapsar todos los grupos (<code>z</code>) · Alternar vista agrupada/plana (<code>g</code>)</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>/</kbd></td>
+                    <td>Filtrar en vivo por nombre, perfil, usuario o regla (<kbd>Esc</kbd> limpia)</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>m</kbd></td>
+                    <td>Alternar política base entre <code>Default-Deny</code> y <code>Sin restricción extra</code></td>
+                  </tr>
+                  <tr>
+                    <td><kbd>r</kbd> / <kbd>Shift</kbd>+<kbd>R</kbd></td>
+                    <td>Refrescar inventario de Headscale (<code>r</code>) · Reabrir asistente de servidor (<code>Shift+R</code>)</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>c</kbd></td>
+                    <td>Abrir resolvedor de conflictos de perfiles (si hay pendientes)</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>s</kbd></td>
+                    <td>Compilar política, revisar Diff HuJSON y aplicar en Headscale</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>q</kbd> / <kbd>Ctrl</kbd>+<kbd>C</kbd></td>
+                    <td>Guardar estado en local y remoto y salir</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="tab-panel" data-panel="edit">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Atajo</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><kbd>Espacio</kbd></td>
+                    <td>Asistente guiado de conexión en 3 pasos (Origen → Destino → Dir/Proto/Puertos)</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>a</kbd></td>
+                    <td>Abrir panel con todos los dispositivos, perfiles o usuarios de la pestaña actual</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>l</kbd></td>
+                    <td>Ligar entidades del mismo nivel en vista de dos columnas</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>u</kbd></td>
+                    <td>Editar dirección (<code>↔</code>, <code>→</code>, <code>←</code>, <code>✕</code>) y protocolo (<code>TCP</code>, <code>UDP</code>, <code>Ambos</code>)</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>p</kbd></td>
+                    <td>Gestionar puertos de la regla seleccionada (<code>a</code> añadir, <code>e</code> editar, <code>x</code> eliminar)</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>f</kbd></td>
+                    <td>Crear o editar perfil con filtro por usuario y checkboxes de dispositivos</td>
+                  </tr>
+                  <tr>
+                    <td><kbd>Ctrl</kbd>+<kbd>X</kbd></td>
+                    <td>Eliminación segura en 2 pasos (selección múltiple + confirmación de impacto)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="tab-panel" data-panel="files">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Archivo</th>
+                    <th>Ruta y propósito</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>Configuración local</strong></td>
+                    <td><code>~/.config/tacl/config.json</code> — Servidor, modo (nativo/contenedor), ejecutable y rutas detectadas.</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Estado local (prevalece)</strong></td>
+                    <td><code>~/.config/tacl/state/&lt;host&gt;-tacl.yaml</code> — Guardado automático de borradores, perfiles, reglas y pestaña activa.</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Estado remoto</strong></td>
+                    <td><code>&lt;carpeta-headscale&gt;/tacl.yaml</code> — Sincronizado al salir o aplicar como respaldo entre equipos.</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Respaldo local extra</strong></td>
+                    <td><code>~/.config/tacl/backups/&lt;host&gt;-tacl.yaml</code> — Copia local de seguridad adicional.</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Backup ACL anterior</strong></td>
+                    <td><code>&lt;ruta-acl&gt;.bak-&lt;timestamp&gt;</code> — Respaldo automático de tu HuJSON previo antes de sobrescribir.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+      <div class="container footer-inner">
+        <div>
+          <strong>tacl</strong> · TUI interactiva para Headscale construida con TypeScript,
+          Bun y OpenTUI.
+        </div>
+        <div class="footer-links">
+          <a
+            href="https://github.com/Tsurematsu/tacl"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Repositorio
+          </a>
+          <a
+            href="https://github.com/Tsurematsu/tacl/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Releases
+          </a>
+          <a href="install.sh">install.sh</a>
+          <a
+            href="https://github.com/Tsurematsu/tacl/blob/main/INFO.md"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Documentación técnica
+          </a>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Image Lightbox -->
+    <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="Vista ampliada">
+      <button id="lightbox-close" class="lightbox-close" type="button" aria-label="Cerrar">
+        ✕
+      </button>
+      <div class="lightbox-content">
+        <img id="lightbox-img" src="" alt="" />
+        <div id="lightbox-caption" class="lightbox-caption"></div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
