@@ -46,7 +46,7 @@ En lugar de editar manualmente extensos archivos **HuJSON**, `tacl` te permite g
 Clona el repositorio e instala las dependencias:
 
 ```bash
-git clone https://github.com/Tsurematsu/tacl.git
+git clone https://github.com/k3stool/tacl.git
 cd tacl
 bun install
 ```

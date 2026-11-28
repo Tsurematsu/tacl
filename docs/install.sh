@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-REPO="Tsurematsu/tacl"
+REPO="k3stool/tacl"
 BIN_NAME="tacl"
 REQUESTED_VERSION="${TACL_VERSION:-latest}"
 FORCE_INSTALL="${TACL_FORCE:-0}"
